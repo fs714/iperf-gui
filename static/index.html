@@ -7,7 +7,7 @@
     <script src="./lib/jquery-3.4.0.min.js"></script>
 </head>
 <body>
-<div id="rate" style="width: 800px;height:400px;"></div>
+<div id="rate" style="width: 800px;height:250px;"></div>
 <script type="text/javascript">
     var rateChart = echarts.init(document.getElementById('rate'));
 
@@ -57,6 +57,109 @@
 
     rateChart.setOption(option);
 </script>
+
+<div id="jitter" style="width: 800px;height:250px;"></div>
+<script type="text/javascript">
+    var jitterChart = echarts.init(document.getElementById('jitter'));
+
+    option = {
+        title: {
+            text: 'Traffic Jitter'
+        },
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+                animation: false
+            }
+        },
+        xAxis: {
+            type: 'value',
+            boundaryGap: [0, '20%'],
+            splitLine: {
+                show: true
+            }
+        },
+        yAxis: {
+            name: 'ms',
+            type: 'value',
+            boundaryGap: [0, '20%'],
+            splitLine: {
+                show: true
+            }
+        },
+        series: [{
+            name: 'Traffic Jitter',
+            type: 'line',
+            showSymbol: false,
+            hoverAnimation: false,
+            data: []
+        }]
+    };
+
+    setInterval(function () {
+        $.get('jitter').done(function (data) {
+            jitterChart.setOption({
+                series: [{
+                    data: data
+                }]
+            });
+        });
+    }, 1000);
+
+    jitterChart.setOption(option);
+</script>
+
+<div id="lossRate" style="width: 800px;height:250px;"></div>
+<script type="text/javascript">
+    var lossRateChart = echarts.init(document.getElementById('lossRate'));
+
+    option = {
+        title: {
+            text: 'Traffic Loss Rate'
+        },
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+                animation: false
+            }
+        },
+        xAxis: {
+            type: 'value',
+            boundaryGap: [0, '20%'],
+            splitLine: {
+                show: true
+            }
+        },
+        yAxis: {
+            name: '%',
+            type: 'value',
+            boundaryGap: [0, '20%'],
+            splitLine: {
+                show: true
+            }
+        },
+        series: [{
+            name: 'Traffic Loss Rate',
+            type: 'line',
+            showSymbol: false,
+            hoverAnimation: false,
+            data: []
+        }]
+    };
+
+    setInterval(function () {
+        $.get('lossrate').done(function (data) {
+            lossRateChart.setOption({
+                series: [{
+                    data: data
+                }]
+            });
+        });
+    }, 1000);
+
+    lossRateChart.setOption(option);
+</script>
+
 </body>
 </html>
 

@@ -56,6 +56,38 @@ func RateHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(resJson)
 }
 
+func JitterHandler(w http.ResponseWriter, r *http.Request) {
+	var result [][]string
+	for _, res := range Results.IRs {
+		result = append(result, []string{strconv.FormatInt(res.Index, 10), strconv.FormatFloat(res.Jitter, 'E', -1, 64)})
+	}
+
+	resJson, err := json.Marshal(result)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resJson)
+}
+
+func LossRateHandler(w http.ResponseWriter, r *http.Request) {
+	var result [][]string
+	for _, res := range Results.IRs {
+		result = append(result, []string{strconv.FormatInt(res.Index, 10), strconv.FormatFloat(res.LossRate, 'E', -1, 64)})
+	}
+
+	resJson, err := json.Marshal(result)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resJson)
+}
+
 func TcpSrvResultHandler(m string) (r IperfResult, err error) {
 	rs := strings.Fields(m)
 
@@ -136,6 +168,8 @@ func main() {
 	go func() {
 		fmt.Println("Start HTTP Server http://192.168.56.101:4096/")
 		http.HandleFunc("/rate", RateHandler)
+		http.HandleFunc("/jitter", JitterHandler)
+		http.HandleFunc("/lossrate", LossRateHandler)
 		http.Handle("/", http.StripPrefix("/", http.FileServer(assetFS())))
 
 		err := http.ListenAndServe(":4096", nil)
@@ -153,6 +187,9 @@ func main() {
 
 	args := "--forceflush -s -i 1 -f k"
 	cmd := exec.Command(iperf3, strings.Split(args, " ")...)
+	defer func() {
+		_ = cmd.Process.Kill()
+	}()
 
 	stdout, _ := cmd.StdoutPipe()
 
@@ -172,8 +209,12 @@ func main() {
 		m := scanner.Text()
 		fmt.Println(m)
 
-		if strings.Contains(m, "Jitter") {
-			mode = "udp"
+		if strings.Contains(m, "Bitrate") {
+			if strings.Contains(m, "Jitter") {
+				mode = "udp"
+			} else {
+				mode = "tcp"
+			}
 		}
 
 		if strings.Contains(m, " sec ") && !strings.Contains(m, "receiver") {
