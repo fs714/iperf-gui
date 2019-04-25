@@ -2,12 +2,15 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type TcpSrvResult struct {
@@ -35,7 +38,31 @@ func init() {
 	}
 }
 
+func IperfHandler(w http.ResponseWriter, r *http.Request) {
+	result := [][]int64{}
+	for i := 0; i < time.Now().Second(); i++ {
+		result = append(result, []int64{int64(i), int64(time.Now().Second() + i)})
+	}
+
+	resJson, err := json.Marshal(result)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resJson)
+}
+
 func main() {
+	http.HandleFunc("/result", IperfHandler)
+	http.Handle("/", http.StripPrefix("/", http.FileServer(assetFS())))
+
+	err := http.ListenAndServe(":8080", nil)
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	iperf3, err := exec.LookPath("iperf3")
 	if err != nil {
 		fmt.Println("The iperf3 is not installed")
