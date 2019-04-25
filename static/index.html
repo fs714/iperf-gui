@@ -7,18 +7,13 @@
     <script src="./lib/jquery-3.4.0.min.js"></script>
 </head>
 <body>
-<div id="main" style="width: 800px;height:400px;"></div>
+<div id="rate" style="width: 800px;height:400px;"></div>
 <script type="text/javascript">
-    var myChart = echarts.init(document.getElementById('main'));
+    var rateChart = echarts.init(document.getElementById('rate'));
 
     option = {
         title: {
             text: 'Traffic Rate'
-        },
-        grid: {
-            left: '10%',
-            right: '10%',
-            bottom: '15%'
         },
         tooltip: {
             trigger: 'axis',
@@ -28,30 +23,31 @@
         },
         xAxis: {
             type: 'value',
+            boundaryGap: [0, '20%'],
             splitLine: {
                 show: true
             }
         },
         yAxis: {
+            name: 'Kbits/sec',
             type: 'value',
-            boundaryGap: [0, '100%'],
+            boundaryGap: [0, '20%'],
             splitLine: {
                 show: true
             }
         },
         series: [{
-            name: 'Test Data',
+            name: 'Traffic Rate',
             type: 'line',
             showSymbol: false,
             hoverAnimation: false,
-            areaStyle: {},
             data: []
         }]
     };
 
     setInterval(function () {
-        $.get('result').done(function (data) {
-            myChart.setOption({
+        $.get('rate').done(function (data) {
+            rateChart.setOption({
                 series: [{
                     data: data
                 }]
@@ -59,7 +55,7 @@
         });
     }, 1000);
 
-    myChart.setOption(option);
+    rateChart.setOption(option);
 </script>
 </body>
 </html>

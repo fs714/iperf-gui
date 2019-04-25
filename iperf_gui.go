@@ -10,22 +10,24 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
+	"sync"
 )
 
-type TcpSrvResult struct {
-	Count int64
-	Rate  int64
-}
-
-type UdpSrvResult struct {
-	Count    int64
-	Rate     int64
+type IperfResult struct {
+	Index    int64
+	Rate     float64
 	Jitter   float64
 	Total    int64
 	Lost     int64
 	LossRate float64
 }
+
+type IperfResults struct {
+	IRs []IperfResult
+	Mu  sync.Mutex
+}
+
+var Results IperfResults
 
 func init() {
 	var version bool
@@ -38,10 +40,10 @@ func init() {
 	}
 }
 
-func IperfHandler(w http.ResponseWriter, r *http.Request) {
-	result := [][]int64{}
-	for i := 0; i < time.Now().Second(); i++ {
-		result = append(result, []int64{int64(i), int64(time.Now().Second() + i)})
+func RateHandler(w http.ResponseWriter, r *http.Request) {
+	var result [][]string
+	for _, res := range Results.IRs {
+		result = append(result, []string{strconv.FormatInt(res.Index, 10), strconv.FormatFloat(res.Rate, 'E', -1, 64)})
 	}
 
 	resJson, err := json.Marshal(result)
@@ -54,80 +56,19 @@ func IperfHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(resJson)
 }
 
-func main() {
-	http.HandleFunc("/result", IperfHandler)
-	http.Handle("/", http.StripPrefix("/", http.FileServer(assetFS())))
-
-	err := http.ListenAndServe(":8080", nil)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	iperf3, err := exec.LookPath("iperf3")
-	if err != nil {
-		fmt.Println("The iperf3 is not installed")
-		os.Exit(0)
-	}
-
-	args := "--forceflush -s -i 1 -f k"
-	cmd := exec.Command(iperf3, strings.Split(args, " ")...)
-
-	stdout, _ := cmd.StdoutPipe()
-
-	scanner := bufio.NewScanner(stdout)
-	scanner.Split(bufio.ScanLines)
-
-	err = cmd.Start()
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(0)
-	}
-
-	mode := "tcp"
-	for scanner.Scan() {
-		m := scanner.Text()
-
-		if strings.Contains(m, "Jitter") {
-			mode = "udp"
-		}
-
-		if strings.Contains(m, " sec ") {
-			if mode == "tcp" {
-				r, err := TcpSrvResultHandler(m)
-				if err != nil {
-					fmt.Println(err)
-					os.Exit(0)
-				}
-
-				fmt.Println(r)
-			} else if mode == "udp" {
-				r, err := UdpSrvResultHandler(m)
-				if err != nil {
-					fmt.Println(err)
-					os.Exit(0)
-				}
-
-				fmt.Println(r)
-			}
-		}
-	}
-
-	_ = cmd.Wait()
-}
-
-func TcpSrvResultHandler(m string) (r TcpSrvResult, err error) {
+func TcpSrvResultHandler(m string) (r IperfResult, err error) {
 	rs := strings.Fields(m)
 
-	var cntf float64
-	cntf, err = strconv.ParseFloat(strings.Split(rs[2], "-")[0], 64)
+	var index float64
+	index, err = strconv.ParseFloat(strings.Split(rs[2], "-")[0], 64)
 	if err != nil {
 		fmt.Printf("Failed to parse %s to int64\n", rs[2])
 		return
 	}
-	r.Count = int64(cntf)
+	r.Index = int64(index)
 
-	var rate int64
-	rate, err = strconv.ParseInt(rs[6], 10, 64)
+	var rate float64
+	rate, err = strconv.ParseFloat(rs[6], 64)
 	if err != nil {
 		fmt.Printf("Failed to parse %s to int64\n", rs[6])
 		return
@@ -137,19 +78,19 @@ func TcpSrvResultHandler(m string) (r TcpSrvResult, err error) {
 	return
 }
 
-func UdpSrvResultHandler(m string) (r UdpSrvResult, err error) {
+func UdpSrvResultHandler(m string) (r IperfResult, err error) {
 	rs := strings.Fields(m)
 
-	var cntf float64
-	cntf, err = strconv.ParseFloat(strings.Split(rs[2], "-")[0], 64)
+	var index float64
+	index, err = strconv.ParseFloat(strings.Split(rs[2], "-")[0], 64)
 	if err != nil {
 		fmt.Printf("Failed to parse %s to int64\n", rs[2])
 		return
 	}
-	r.Count = int64(cntf)
+	r.Index = int64(index)
 
-	var rate int64
-	rate, err = strconv.ParseInt(rs[6], 10, 64)
+	var rate float64
+	rate, err = strconv.ParseFloat(rs[6], 64)
 	if err != nil {
 		fmt.Printf("Failed to parse %s to int64\n", rs[6])
 		return
@@ -189,4 +130,75 @@ func UdpSrvResultHandler(m string) (r UdpSrvResult, err error) {
 	r.LossRate = lossRate
 
 	return
+}
+
+func main() {
+	go func() {
+		fmt.Println("Start HTTP Server http://192.168.56.101:4096/")
+		http.HandleFunc("/rate", RateHandler)
+		http.Handle("/", http.StripPrefix("/", http.FileServer(assetFS())))
+
+		err := http.ListenAndServe(":4096", nil)
+		if err != nil {
+			fmt.Println("Failed to start http server with error: " + err.Error())
+			os.Exit(0)
+		}
+	}()
+
+	iperf3, err := exec.LookPath("iperf3")
+	if err != nil {
+		fmt.Println("The iperf3 is not installed")
+		os.Exit(0)
+	}
+
+	args := "--forceflush -s -i 1 -f k"
+	cmd := exec.Command(iperf3, strings.Split(args, " ")...)
+
+	stdout, _ := cmd.StdoutPipe()
+
+	scanner := bufio.NewScanner(stdout)
+	scanner.Split(bufio.ScanLines)
+
+	err = cmd.Start()
+	if err != nil {
+		fmt.Println(err)
+		_ = cmd.Process.Kill()
+		os.Exit(0)
+	}
+
+	mode := "tcp"
+	index := 0
+	for scanner.Scan() {
+		m := scanner.Text()
+		fmt.Println(m)
+
+		if strings.Contains(m, "Jitter") {
+			mode = "udp"
+		}
+
+		if strings.Contains(m, " sec ") && !strings.Contains(m, "receiver") {
+			var r IperfResult
+			if mode == "tcp" {
+				r, err = TcpSrvResultHandler(m)
+
+			} else if mode == "udp" {
+				r, err = UdpSrvResultHandler(m)
+			}
+
+			if err != nil {
+				fmt.Println(err)
+				_ = cmd.Process.Kill()
+				os.Exit(0)
+			}
+
+			r.Index = int64(index)
+			index++
+
+			Results.Mu.Lock()
+			Results.IRs = append(Results.IRs, r)
+			Results.Mu.Unlock()
+		}
+	}
+
+	_ = cmd.Wait()
 }
