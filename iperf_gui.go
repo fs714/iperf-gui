@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -107,7 +108,8 @@ func TcpSrvResultHandler(m string) (r IperfResult, err error) {
 		}
 		r.Rate = rate
 	} else {
-		fmt.Println("Failed to match: " + m)
+		err = errors.New("Failed to match: " + m)
+		fmt.Println(err.Error())
 	}
 
 	return
@@ -156,7 +158,8 @@ func UdpSrvResultHandler(m string) (r IperfResult, err error) {
 		}
 		r.LossRate = lossRate
 	} else {
-		fmt.Println("Failed to match: " + m)
+		err = errors.New("Failed to match: " + m)
+		fmt.Println(err.Error())
 	}
 
 	return
@@ -246,8 +249,7 @@ func main() {
 
 			if err != nil {
 				fmt.Println(err)
-				_ = cmd.Process.Kill()
-				os.Exit(0)
+				continue
 			}
 
 			r.Index = int64(index)
