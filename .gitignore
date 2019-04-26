@@ -34,3 +34,6 @@ __pycache__/
 
 # Bin
 bin/
+
+# Generated Codes
+bindata.go
